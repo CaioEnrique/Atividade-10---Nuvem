@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Nuvem de Letras - Chuva do Alfabeto</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: black;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .info {
+            position: fixed;
+            bottom: 12px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: rgba(255,255,255,0.4);
+            font-size: 11px;
+            font-family: monospace;
+            pointer-events: none;
+            z-index: 10;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="info">☁️ NUVEM DE LETRAS • CHUVA DO ALFABETO ☁️</div>
+
+    <script>
+        (function(){
+            const canvas = document.getElementById('canvas');
+            let ctx = canvas.getContext('2d');
+            let width, height;
+            
+            // Alfabeto completo
+            const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+            const lettersArray = alphabet.split('');
+            
+            // Array de gotas
+            let drops = [];
+            const MAX_DROPS = 150;
+            
+            // Array para efeitos de respingo (mais explícitos)
+            let splashEffects = [];
+            
+            // Posição fixa da nuvem
+            let cloudX = 0;
+            let cloudY = 70;
+            
+            // Altura do chão
+            let groundY = 0;
+            
+            // Controle de emissão
+            let emissionCounter = 0;
+            const EMISSION_INTERVAL = 9;
+            
+            // Gravidade suave
+            const GRAVITY = 0.13;
+            
+            // Função para criar uma nova gota-letra (cor branca)
+            function createLetterDrop() {
+                if (drops.length >= MAX_DROPS) return;
+                
+                let offsetX = (Math.random() - 0.5) * 180; // largura maior para nuvem horizontal
+                let startX = cloudX + offsetX;
+                let startY = cloudY + 65;
+                
+                const randomLetter = lettersArray[Math.floor(Math.random() * lettersArray.length)];
+                const size = 15 + Math.random() * 14;
+                const speed = 0.9 + Math.random() * 1.6;
+                
+                drops.push({
+                    x: startX,
+                    y: startY,
+                    letter: randomLetter,
+                    size: size,
+                    speed: speed,
+                    opacity: 0.95,
+                    rotation: (Math.random() - 0.5) * 0.4,
+                    rotSpeed: (Math.random() - 0.5) * 0.015
+                });
+            }
+            
+            // Criar efeito de respingo EXPLÍCITO quando a letra atinge o chão
+            function createSplash(x, y, letter, size) {
+                // Efeito principal: a letra se expande e desaparece com brilho
+                splashEffects.push({
+                    x: x,
+                    y: y,
+                    letter: letter,
+                    size: size,
+                    life: 1.0,
+                    maxLife: 0.6,
+                    type: 'main'
+                });
+                
+                // Círculo de impacto que se expande (onda)
+                splashEffects.push({
+                    x: x,
+                    y: y,
+                    radius: 8,
+                    life: 1.0,
+                    maxLife: 0.5,
+                    type: 'ring'
+                });
+                
+                // Partículas de respingo (várias) - efeito explícito
+                const particleCount = 8 + Math.floor(Math.random() * 6);
+                for (let i = 0; i < particleCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 1.5 + Math.random() * 3;
+                    splashEffects.push({
+                        x: x,
+                        y: y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed - 2,
+                        size: 2 + Math.random() * 5,
+                        life: 1.0,
+                        maxLife: 0.55,
+                        type: 'particle',
+                        letter: Math.random() > 0.7 ? letter : null
+                    });
+                }
+                
+                // Pequeno clarão no ponto de impacto
+                splashEffects.push({
+                    x: x,
+                    y: y,
+                    flash: 1.0,
+                    life: 1.0,
+                    maxLife: 0.2,
+                    type: 'flash'
+                });
+            }
+            
+            // Atualizar gotas e efeitos
+            function updateDrops() {
+                // Atualizar gotas
+                for (let i = drops.length - 1; i >= 0; i--) {
+                    const drop = drops[i];
+                    
+                    drop.speed += GRAVITY;
+                    drop.y += drop.speed;
+                    
+                    if (drop.rotation !== undefined) {
+                        drop.rotation += drop.rotSpeed || 0;
+                    }
+                    
+                    // Colisão com o chão
+                    if (drop.y + drop.size / 2 >= groundY) {
+                        createSplash(drop.x, groundY - 3, drop.letter, drop.size);
+                        drops.splice(i, 1);
+                        continue;
+                    }
+                    
+                    if (drop.x < -80 || drop.x > width + 80 || drop.y > height + 150) {
+                        drops.splice(i, 1);
+                        continue;
+                    }
+                }
+                
+                // Atualizar efeitos de respingo
+                for (let i = splashEffects.length - 1; i >= 0; i--) {
+                    const effect = splashEffects[i];
+                    effect.life -= 0.025;
+                    
+                    // Atualizar partículas com física
+                    if (effect.type === 'particle') {
+                        effect.x += effect.vx;
+                        effect.y += effect.vy;
+                        effect.vy += 0.25; // gravidade nas partículas
+                        effect.vx *= 0.98;
+                    }
+                    
+                    // Atualizar anel expansivo
+                    if (effect.type === 'ring') {
+                        effect.radius = 8 + (1 - effect.life) * 28;
+                    }
+                    
+                    if (effect.life <= 0) {
+                        splashEffects.splice(i, 1);
+                    }
+                }
+            }
+            
+            // Desenhar gotas (cor BRANCA)
+            function drawDrops() {
+                for (const drop of drops) {
+                    ctx.save();
+                    
+                    if (drop.rotation) {
+                        ctx.translate(drop.x, drop.y);
+                        ctx.rotate(drop.rotation);
+                        ctx.font = `${drop.size}px "Segoe UI", "Arial", "Poppins", monospace`;
+                        ctx.fillStyle = `rgba(255, 255, 255, ${drop.opacity})`;
+                        ctx.shadowBlur = 6;
+                        ctx.shadowColor = "rgba(255, 255, 255, 0.7)";
+                        ctx.fillText(drop.letter, 0, 0);
+                    } else {
+                        ctx.font = `${drop.size}px "Segoe UI", "Arial", "Poppins", monospace`;
+                        ctx.shadowBlur = 6;
+                        ctx.shadowColor = "rgba(255, 255, 255, 0.7)";
+                        ctx.fillStyle = `rgba(255, 255, 255, ${drop.opacity})`;
+                        ctx.fillText(drop.letter, drop.x, drop.y);
+                    }
+                    
+                    ctx.restore();
+                }
+            }
+            
+            // Desenhar efeitos de respingo EXPLÍCITOS
+            function drawSplashEffects() {
+                for (const effect of splashEffects) {
+                    ctx.save();
+                    
+                    if (effect.type === 'main') {
+                        // Letra principal se expandindo e desaparecendo
+                        const scale = 1 + (1 - effect.life) * 1.2;
+                        const alpha = effect.life * 0.9;
+                        ctx.translate(effect.x, effect.y);
+                        ctx.scale(scale, scale);
+                        ctx.font = `${effect.size * 1.1}px "Segoe UI", "Arial", monospace`;
+                        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                        ctx.shadowBlur = 12;
+                        ctx.shadowColor = `rgba(255, 255, 255, 0.9)`;
+                        ctx.fillText(effect.letter, 0, 0);
+                        
+                        // Contorno brilhante
+                        ctx.fillStyle = `rgba(255, 255, 200, ${alpha * 0.6})`;
+                        ctx.fillText(effect.letter, -1, -1);
+                        
+                    } else if (effect.type === 'ring') {
+                        // Anel de impacto expansivo
+                        const alpha = effect.life * 0.8;
+                        ctx.beginPath();
+                        ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+                        ctx.lineWidth = 2.5;
+                        ctx.stroke();
+                        
+                        // Segundo anel mais interno
+                        ctx.beginPath();
+                        ctx.arc(effect.x, effect.y, effect.radius * 0.6, 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(255, 255, 200, ${alpha * 0.7})`;
+                        ctx.lineWidth = 1.8;
+                        ctx.stroke();
+                        
+                    } else if (effect.type === 'particle') {
+                        // Partículas de respingo
+                        const alpha = effect.life * 0.85;
+                        ctx.beginPath();
+                        ctx.arc(effect.x, effect.y, effect.size * (0.6 + effect.life * 0.5), 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+                        ctx.fill();
+                        
+                        // Brilho interno
+                        ctx.beginPath();
+                        ctx.arc(effect.x, effect.y, effect.size * 0.4, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(255, 255, 200, ${alpha})`;
+                        ctx.fill();
+                        
+                        // Se a partícula tem letra associada
+                        if (effect.letter) {
+                            ctx.font = `${effect.size * 0.9}px monospace`;
+                            ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
+                            ctx.fillText(effect.letter, effect.x - effect.size/2, effect.y + effect.size/3);
+                        }
+                        
+                    } else if (effect.type === 'flash') {
+                        // Clarão rápido
+                        const alpha = effect.life * 0.8;
+                        ctx.beginPath();
+                        ctx.arc(effect.x, effect.y, 12 * (1 - effect.life) + 3, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(255, 255, 200, ${alpha * 0.7})`;
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(effect.x, effect.y, 6 * (1 - effect.life) + 2, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                        ctx.fill();
+                    }
+                    
+                    ctx.restore();
+                }
+            }
+            
+            // Desenhar nuvem MAIOR HORIZONTALMENTE e MAIS DESFOCADA
+            function drawCloud() {
+                ctx.save();
+                
+                const cloudCenterX = cloudX;
+                const cloudCenterY = cloudY;
+                
+                // Aplicar desfoque via shadowBlur e múltiplas camadas translúcidas
+                ctx.shadowBlur = 0;
+                
+                // Camada base - nuvem extremamente alongada horizontalmente
+                // Série de círculos sobrepostos formando uma nuvem larga e fofa
+                
+                // Primeira camada (mais interna e densa)
+                ctx.beginPath();
+                ctx.arc(cloudCenterX, cloudCenterY, 58, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 68, cloudCenterY - 8, 52, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 72, cloudCenterY - 5, 54, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 118, cloudCenterY + 2, 48, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 122, cloudCenterY + 3, 49, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 35, cloudCenterY + 18, 46, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 40, cloudCenterY + 20, 47, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 92, cloudCenterY + 12, 44, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 95, cloudCenterY + 14, 45, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+                ctx.fill();
+                
+                // Segunda camada - mais difusa (desfoque visual)
+                ctx.beginPath();
+                ctx.arc(cloudCenterX, cloudCenterY - 4, 64, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 82, cloudCenterY - 12, 58, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 86, cloudCenterY - 10, 60, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 135, cloudCenterY - 2, 52, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 140, cloudCenterY + 0, 53, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 52, cloudCenterY + 12, 50, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 55, cloudCenterY + 14, 51, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(250, 250, 255, 0.55)";
+                ctx.fill();
+                
+                // Terceira camada - ainda mais difusa e larga (efeito desfocado)
+                ctx.beginPath();
+                ctx.arc(cloudCenterX - 20, cloudCenterY - 8, 70, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 25, cloudCenterY - 10, 72, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 100, cloudCenterY - 5, 62, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 105, cloudCenterY - 3, 63, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 155, cloudCenterY + 5, 55, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 160, cloudCenterY + 7, 56, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX - 75, cloudCenterY + 22, 52, 0, Math.PI * 2);
+                ctx.arc(cloudCenterX + 78, cloudCenterY + 24, 53, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+                ctx.fill();
+                
+                // Quarta camada - brilho difuso extremo (desfoque máximo)
+                ctx.shadowBlur = 28;
+                ctx.shadowColor = "rgba(255, 255, 255, 0.6)";
+                ctx.beginPath();
+                ctx.ellipse(cloudCenterX, cloudCenterY - 5, 130, 65, 0, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+                ctx.fill();
+                
+                ctx.shadowBlur = 0;
+                
+                // Camada de brilho atmosférico (desfoque extra)
+                ctx.globalCompositeOperation = "lighter";
+                ctx.beginPath();
+                ctx.ellipse(cloudCenterX, cloudCenterY - 3, 165, 75, 0, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(200, 220, 255, 0.12)";
+                ctx.fill();
+                
+                ctx.globalCompositeOperation = "source-over";
+                ctx.restore();
+            }
+            
+            // Desenhar chão (linha branca tênue com efeito de brilho)
+            function drawGround() {
+                // Linha principal
+                ctx.beginPath();
+                ctx.moveTo(0, groundY);
+                ctx.lineTo(width, groundY);
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+                ctx.lineWidth = 2.2;
+                ctx.stroke();
+                
+                // Brilho acima da linha
+                ctx.beginPath();
+                ctx.moveTo(0, groundY - 2);
+                ctx.lineTo(width, groundY - 2);
+                ctx.strokeStyle = "rgba(255, 255, 200, 0.4)";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // Brilho abaixo da linha (reflexo)
+                ctx.beginPath();
+                ctx.moveTo(0, groundY + 1);
+                ctx.lineTo(width, groundY + 1);
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Pequenos pontos de luz na linha (efeito dinâmico)
+                for (let i = 0; i < 20; i++) {
+                    const t = (Date.now() * 0.003 + i) % 1;
+                    const x = (t * width + i * 47) % width;
+                    ctx.beginPath();
+                    ctx.arc(x, groundY, 1.8, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 255, 200, ${0.3 + Math.sin(Date.now() * 0.008 + i) * 0.2})`;
+                    ctx.fill();
+                }
+            }
+            
+            // Emitir letras
+            function emitLetters() {
+                emissionCounter++;
+                if (emissionCounter >= EMISSION_INTERVAL) {
+                    emissionCounter = 0;
+                    const count = Math.random() > 0.7 ? 2 : 1;
+                    for (let i = 0; i < count; i++) {
+                        createLetterDrop();
+                    }
+                }
+            }
+            
+            // Fundo preto com leve brilho nas bordas
+            function drawBackground() {
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, width, height);
+                
+                // Pequenas estrelas muito sutis
+                ctx.fillStyle = "rgba(255,255,255,0.08)";
+                for (let s = 0; s < 80; s++) {
+                    if (s % 13 === 0) {
+                        ctx.beginPath();
+                        ctx.arc((s * 131) % width, (s * 73) % (height * 0.5), 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+            
+            // Animação principal
+            function animate() {
+                if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
+                    width = window.innerWidth;
+                    height = window.innerHeight;
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    cloudX = width / 2;
+                    cloudY = height * 0.11;
+                    groundY = height * 0.85;
+                }
+                
+                drawBackground();
+                drawCloud();
+                emitLetters();
+                updateDrops();
+                drawDrops();
+                drawSplashEffects();
+                drawGround();
+                
+                requestAnimationFrame(animate);
+            }
+            
+            // Inicialização
+            function init() {
+                width = window.innerWidth;
+                height = window.innerHeight;
+                canvas.width = width;
+                canvas.height = height;
+                
+                cloudX = width / 2;
+                cloudY = height * 0.11;
+                groundY = height * 0.85;
+                
+                for (let i = 0; i < 8; i++) {
+                    setTimeout(() => createLetterDrop(), i * 80);
+                }
+                
+                animate();
+            }
+            
+            window.addEventListener('resize', () => {
+                width = window.innerWidth;
+                height = window.innerHeight;
+                canvas.width = width;
+                canvas.height = height;
+                cloudX = width / 2;
+                cloudY = height * 0.11;
+                groundY = height * 0.85;
+            });
+            
+            init();
+        })();
+    </script>
+</body>
+</html>
